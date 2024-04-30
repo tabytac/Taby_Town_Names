@@ -312,7 +312,7 @@ def process_country_region(country_code, region_code, subregion_code):
 def take_input():
     data_input = []
     while True:
-        user_input = input("Enter a country code, region code, and subregion code separated by periods (e.g. FR.53.22) or enter 'done' to finish: ")
+        user_input = input("Enter a country code, region code, and subregion code separated by periods (e.g. GB.ENG.GLA for all names in London) or enter 'done' to finish: ")
         if user_input == "done":
             break
         data_input.append(user_input)
