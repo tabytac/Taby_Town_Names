@@ -6,9 +6,8 @@ from datetime import datetime
 from to_precision import to_precision
 
 # Constants
-# COUNTRY_REGION_PAIRS = [["GB", ""], ["GB", "ENG"], ["GB", "SCT"], ["GB", "WLS"], ["FR", ""], ["DE", ""], ["IT", ""], ["US", ""], ["CA", ""], ["JP", ""], ["RU", ""], ["CN", ""], ["IN", ""], ["AU", ""], ["NZ", ""], ["BR", ""], ["PH", ""], ["ES", ""], ["", ""]]
 # COUNTRY_REGION_TRIPLES = [["GB", "", ""], ["GB", "ENG", ""], ["GB", "SCT", ""], ["GB", "WLS", ""], ["FR", "", ""], ["DE", "", ""], ["IT", "", ""], ["US", "", ""], ["CA", "", ""], ["JP", "", ""], ["RU", "", ""], ["CN", "", ""], ["IN", "", ""], ["AU", "", ""], ["NZ", "", ""], ["BR", "", ""], ["PH", "", ""], ["ES", "", ""], ["", "", ""]]
-COUNTRY_REGION_TRIPLES = [["VA", "", ""]]
+COUNTRY_REGION_TRIPLES = [["FR", "52", ""]]
 
 SORT_BY_POPULATION = False
 POPULATION_THRESHOLD = 0
@@ -33,6 +32,7 @@ MAX_TOWNS = 16320  # Due to OpenTTD limit
 BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 DATA_PATH = os.path.join(BASE_PATH, "Data")
 DATA_URL = "https://download.geonames.org/export/dump/"
+LIST_OF_DATA_FILES = ["countryInfo.txt", "admin1CodesASCII.txt", "admin2Codes.txt", "featureCodes_en.txt", "cities15000.zip", "cities5000.zip", "cities1000.zip", "cities500.zip"]
 ID_FILE = os.path.join(BASE_PATH, "file_id.txt")
 BOILERPLATE_START = """grf {{
     grfid: "{grf_id}";
@@ -194,32 +194,66 @@ def write_nml_file(output_nml, grf_id, version, town_records, min_weight, scale)
         f_out.write("}\n}\n")
 
 def determine_input_data(country_code):
+    # Check if merged file should be used
     if MERGED_FILE_OVERIDE or country_code == "":
-        try:
-            function_return = os.path.join(DATA_PATH, "allCountries.txt")
-            return function_return
-        except FileNotFoundError:
-            print("Merged file not found")
-    try:
-        function_return = os.path.join(DATA_PATH, "Data", f"{country_code}.txt")
-        return function_return
-    except FileNotFoundError:
-        print("File not found, downloading")
-        os.chdir(os.path.dirname(os.path.join(DATA_PATH, "Data")))
-        subprocess.run(["curl", DATA_URL + f"{country_code}.zip", "--output", f"{DATA_PATH}/Data/{country_code}.zip"])
-        print(DATA_URL + f"Data/{country_code}.zip")
-        subprocess.run(["tar", "-xf", f"{DATA_PATH}\\Data\\{country_code}.zip", "-C", f"{DATA_PATH}\\Data"])
-        print (f"{DATA_PATH}/Data/{country_code}.zip")
-        os.remove(f"{DATA_PATH}/Data/{country_code}.zip")
-        os.remove(f"{DATA_PATH}/Data/readme.txt")
-        function_return = os.path.join(DATA_PATH, "Data", f"{country_code}.txt")
-        return function_return
+        if not os.path.exists(os.path.join(DATA_PATH, "allCountries.txt")):
+            download_data_files("allCountries.zip")
+        file_path = os.path.join(DATA_PATH, "allCountries.txt")
+    else:
+        file_path = os.path.join(DATA_PATH, f"Data\\{country_code}.txt")
+    
 
+    if not os.path.exists(os.path.join(DATA_PATH, "Data")):
+        os.makedirs(os.path.join(DATA_PATH, "Data"), exist_ok=True)
+    if not os.path.exists(file_path):
+        download_and_extract_country_file(country_code, file_path)
+    
+    return file_path
 
+def download_and_extract_country_file(country_code, file_path):
+    zip_file = f"{country_code}.zip"
+    zip_path = os.path.join(DATA_PATH, f"Data\\{zip_file}")
+    print(zip_path)
+    
+    # URL to download the file
+    download_url = DATA_URL + zip_file
+    
+    # Download the zip file
+    print(f"Downloading {download_url}")
+    subprocess.run(["curl", "-o", zip_path, download_url], check=True)
+
+    # Extract the zip file
+    print(f"Extracting {zip_path}")
+    subprocess.run(["tar", "-xf",zip_path, "-C",f"{DATA_PATH}\\Data"], check=True)
+    
+    # Clean up the zip file
+    os.remove(zip_path)
+    
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Expected data file not found: {file_path}")
+
+def download_data_files(file_name):
+    file_path = os.path.join(DATA_PATH, file_name)
+    download_url = DATA_URL + file_name
+    print(f"Downloading {download_url}")
+    subprocess.run(["curl", "-o", file_path, download_url], check=True)
+    if file_name.endswith(".zip"):
+        zip_path = file_path
+        print(f"Extracting {zip_path}")
+        subprocess.run(["tar", "-xf", zip_path, "-C", DATA_PATH], check=True)
+        file_path = file_path.replace(".zip", ".txt")
+        os.remove(zip_path)
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Expected data file not found: {file_path}")
 
 def process_town_data(country_code, region_code, subregion_code):
     print(f"Processing {country_code} {region_code} {subregion_code}")
-    input_data = determine_input_data(country_code)
+    try:
+        input_data = determine_input_data(country_code)
+        print(f"Data file used: {input_data}")
+    except Exception as e:
+        print(e)
+        return  # or handle error appropriately
     town_records = read_and_process_towns(input_data, country_code, region_code, subregion_code)
     town_records = sort_town_records(town_records, SORT_BY_POPULATION)
     town_records = town_records[:MAX_TOWNS]
@@ -242,7 +276,7 @@ def process_country_region(country_code, region_code, subregion_code):
     # Adjust file paths and names based on country and region
     country_file_code = country_code if country_code else "World"
     location_dir = f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names"
-    output_dir = os.path.join(BASE_PATH, location_dir)
+    output_dir = os.path.join(BASE_PATH, "Source_Files", location_dir)
     output_nml = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.nml")
     output_grf = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.grf")
     os.makedirs(output_dir, exist_ok=True)
@@ -265,6 +299,15 @@ def process_country_region(country_code, region_code, subregion_code):
     print(f"Processed {len(town_records)} towns for {country_code} {region_code} {subregion_code}")
 
 def main():
+    #check if the data directory exists and if not create it
+    #check if the correct files are in the data directory
+    if not os.path.exists(DATA_PATH):
+        os.makedirs(DATA_PATH, exist_ok=True)
+    for file in LIST_OF_DATA_FILES:
+        if not os.path.exists(os.path.join(DATA_PATH, file)):
+            download_data_files(file)
+            print(f"Downloaded {file}")
+
     for country_region in COUNTRY_REGION_TRIPLES:
         country_code, region_code, subregion_code = country_region
         process_country_region(country_code, region_code, subregion_code)
