@@ -6,10 +6,10 @@ from datetime import datetime
 from to_precision import to_precision
 
 # Constants
-# COUNTRY_REGION_TRIPLES = [["GB", "", ""], ["GB", "ENG", ""], ["GB", "SCT", ""], ["GB", "WLS", ""], ["FR", "", ""], ["DE", "", ""], ["IT", "", ""], ["US", "", ""], ["CA", "", ""], ["JP", "", ""], ["RU", "", ""], ["CN", "", ""], ["IN", "", ""], ["AU", "", ""], ["NZ", "", ""], ["BR", "", ""], ["PH", "", ""], ["ES", "", ""], ["", "", ""]]
-COUNTRY_REGION_TRIPLES = [["FR", "52", ""]]
+# DATA_INPUT = ["FR.53.22", "GB.ENG.GLA", "GB.ENG", "GB"]
+DATA_INPUT = ["GB", "FR", "DE", "ES", "IT", "NL", "SE", "CH", "RU" ,"US", "CA", "AU", "BR", "CN", "IN", "JP", "MX", "KR", "NZ", "PH", "GB.ENG", "GB.SCT", "GB.WLS"]
 
-SORT_BY_POPULATION = False
+SORT_BY_POPULATION = True
 POPULATION_THRESHOLD = 0
 MERGED_FILE_OVERIDE = False
 
@@ -25,6 +25,8 @@ COLUMN_TYPE_SUB_TYPE_LOC = 7
 COLUMN_POPULATION = 14
 COLUMN_NAME = 1
 
+
+USE_OPENTTD_DIR = True
 OPENTTD_DIR = r"D:\Documents\OpenTTD\content_download\newgrf\Taby_Town_Names"
 MAX_TOWNS = 16320  # Due to OpenTTD limit
 
@@ -33,6 +35,8 @@ BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 DATA_PATH = os.path.join(BASE_PATH, "Data")
 DATA_URL = "https://download.geonames.org/export/dump/"
 LIST_OF_DATA_FILES = ["countryInfo.txt", "admin1CodesASCII.txt", "admin2Codes.txt", "featureCodes_en.txt", "cities15000.zip", "cities5000.zip", "cities1000.zip", "cities500.zip"]
+GITHHUB_COUNTRY_DEMOONYM_URL = "https://raw.githubusercontent.com/mledoze/countries/blob/master/dist/countries.csv"
+#TODO: add the github url for the country demonyms file
 ID_FILE = os.path.join(BASE_PATH, "file_id.txt")
 BOILERPLATE_START = """grf {{
     grfid: "{grf_id}";
@@ -52,6 +56,7 @@ town_names {{
 def compile_and_deploy_grf(output_nml, output_grf, openttd_dir):
     os.chdir(os.path.dirname(output_nml))
     subprocess.run(["nmlc", output_nml])
+    print(f"Compiled {output_nml} to {output_grf}")
     subprocess.run(["copy", output_grf, openttd_dir], shell=True)
     print(f"Deployed {output_grf} to {openttd_dir}")
 
@@ -90,68 +95,74 @@ def get_grf_id_and_version(output_nml, id_assignments):
     write_id_assignments(id_assignments)
     return new_id, version
 
-def get_country_name(country_code):
-    with open(os.path.join(DATA_PATH, "countryInfo.txt"), 'r', encoding='utf-8') as f:
+def get_name(code, file_path, column_index):
+    with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
             columns = line.split('\t')
-            if columns[0] == country_code:
-                return columns[4]
+            if columns[0] == code:
+                return columns[column_index]
     return ""
 
-def get_region_name(country_code, region_code):
-    with open(os.path.join(DATA_PATH, "admin1CodesASCII.txt"), 'r', encoding='utf-8') as f:
-        for line in f:
-            columns = line.split('\t')
-            if columns[0] == f"{country_code}.{region_code}":
-                return columns[1]
-    return ""
-def get_subregion_name(country_code, region_code, subregion_code):
-    with open(os.path.join(DATA_PATH, "admin2Codes.txt"), 'r', encoding='utf-8') as f:
-        for line in f:
-            columns = line.split('\t')
-            if columns[0] == f"{country_code}.{region_code}.{subregion_code}":
-                return columns[1]
-    return ""
+def get_country_region_subregion_names(country_code, region_code, subregion_code):
+    country_name = ""
+    region_name = ""
+    subregion_name = ""
+    if country_code:
+        country_name = get_name(country_code, os.path.join(DATA_PATH, "countryInfo.txt"), 4)
+    if region_code:
+        region_name = get_name(f"{country_code}.{region_code}", os.path.join(DATA_PATH, "admin1CodesASCII.txt"), 1)
+    if subregion_code:
+        subregion_name = get_name(f"{country_code}.{region_code}.{subregion_code}", os.path.join(DATA_PATH, "admin2Codes.txt"), 1)
+    return country_name, region_name, subregion_name
 
-def update_language_file(lang_file_path, country_code, region_code, subregion_code, version, num_towns, lowest_population):
-    if os.path.exists(lang_file_path):
-        with open(lang_file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-        country_name = get_country_name(country_code)
-        region_name = get_region_name(country_code, region_code)
-        subregion_name = get_subregion_name(country_code, region_code, subregion_code)
-        # if region_name == "":
-        #     country_name_a = f"{country_name}".strip()
-        # else:
-        #     country_name_a = f"{country_name} ({region_name})".strip()
-        # country_name_b = country_name_a
-        country_name_a = f"{country_name}".strip()
-        if region_name != "":
-            country_name_a = f"{country_name} {region_name}".strip()
-
-        if subregion_name != "":
-            country_name_a = f"{country_name} {region_name} {subregion_name}".strip()
+def prepare_output_dir(country_code, region_code, subregion_code):
+    os.makedirs(output_dir, exist_ok=True)
+    #instead of copying the template directory, make a new directory and create the english.lng file in it
+    template_dir = os.path.join(BASE_PATH, "Template")
+    try:
+        shutil.copytree(template_dir, output_dir, dirs_exist_ok=True)
+    except FileExistsError:
+        print("Directory already exists, contents will be merged")
 
 
-        # if the coutnry name is empty and the region code is too, then we are processing the world file
-        country_name_b = country_name_a
-        if country_name_a == "":
-            country_name_a = "World"
-            country_name_b = "the world"
-
-        current_date = datetime.now().strftime("%Y-%m-%d")
-
-        content = content.replace("[COUNTRY_NAME_A]", country_name_a)
-        content = content.replace("[COUNTRY_NAME_B]", country_name_b)
-        content = content.replace("[VERSION]", str(version))
-        content = content.replace("[DATE]", current_date)
-        content = content.replace("[NUM_TOWNS]", str(num_towns))
-        content = content.replace("[LOWEST_POPULATION]", lowest_population)
-
+def update_language_file(country_code, region_code, subregion_code, version, num_towns, lowest_population):
+    lang_file_path = os.path.join(output_dir, 'lang', 'english.lng')
+    #if the lang file not exits, make the folder, then english.lng file 
+    if not os.path.exists(lang_file_path):
+        os.makedirs(os.path.join(output_dir, 'lang'), exist_ok=True)
         with open(lang_file_path, 'w', encoding='utf-8') as file:
-            file.write(content)
-    else:
-        print(f"Language file not found: {lang_file_path}")
+            file.write("/* Taby Town Names */\n")
+            file.write("STR_GRF_NAME: \"Taby Town Names\"\n")
+            file.write("STR_GRF_DESC: \"Adds a large number of town names to OpenTTD.\"\n")
+            file.write("STR_GRF_URL: \"\n")
+    with open(lang_file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+    country_name, region_name, subregion_name = get_country_region_subregion_names(country_code, region_code, subregion_code)
+    country_name_a = f"{country_name}".strip()
+    if region_name != "":
+        country_name_a = f"{country_name} {region_name}".strip()
+
+    if subregion_name != "":
+        country_name_a = f"{country_name} {region_name} {subregion_name}".strip()
+
+
+    # if the coutnry name is empty and the region code is too, then we are processing the world file
+    country_name_b = country_name_a
+    if country_name_a == "":
+        country_name_a = "World"
+        country_name_b = "the world"
+
+    current_date = datetime.now().strftime("%Y-%m-%d")
+
+    content = content.replace("[COUNTRY_NAME_A]", country_name_a)
+    content = content.replace("[COUNTRY_NAME_B]", country_name_b)
+    content = content.replace("[VERSION]", str(version))
+    content = content.replace("[DATE]", current_date)
+    content = content.replace("[NUM_TOWNS]", str(num_towns))
+    content = content.replace("[LOWEST_POPULATION]", lowest_population)
+
+    with open(lang_file_path, 'w', encoding='utf-8') as file:
+        file.write(content)
 
 def read_and_process_towns(file_path, country_code, region_code, subregion_code):
     towns = []
@@ -200,7 +211,7 @@ def determine_input_data(country_code):
             download_data_files("allCountries.zip")
         file_path = os.path.join(DATA_PATH, "allCountries.txt")
     else:
-        file_path = os.path.join(DATA_PATH, f"Data\\{country_code}.txt")
+        file_path = os.path.join(DATA_PATH, f"Data/{country_code}.txt")
     
 
     if not os.path.exists(os.path.join(DATA_PATH, "Data")):
@@ -212,7 +223,7 @@ def determine_input_data(country_code):
 
 def download_and_extract_country_file(country_code, file_path):
     zip_file = f"{country_code}.zip"
-    zip_path = os.path.join(DATA_PATH, f"Data\\{zip_file}")
+    zip_path = os.path.join(DATA_PATH, f"Data/{zip_file}")
     print(zip_path)
     
     # URL to download the file
@@ -224,7 +235,7 @@ def download_and_extract_country_file(country_code, file_path):
 
     # Extract the zip file
     print(f"Extracting {zip_path}")
-    subprocess.run(["tar", "-xf",zip_path, "-C",f"{DATA_PATH}\\Data"], check=True)
+    subprocess.run(["tar", "-xf",zip_path, "-C",f"{DATA_PATH}/Data"], check=True)
     
     # Clean up the zip file
     os.remove(zip_path)
@@ -279,24 +290,70 @@ def process_country_region(country_code, region_code, subregion_code):
     output_dir = os.path.join(BASE_PATH, "Source_Files", location_dir)
     output_nml = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.nml")
     output_grf = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.grf")
-    os.makedirs(output_dir, exist_ok=True)
-    template_dir = os.path.join(BASE_PATH, "Template")
-    try:
-        shutil.copytree(template_dir, output_dir, dirs_exist_ok=True)
-    except FileExistsError:
-        print("Directory already exists, contents will be merged")
-
+    prepare_output_dir(country_code, region_code, subregion_code)
+    
     town_records, min_weight, scale, num_towns, lowest_population = process_town_data(country_code, region_code, subregion_code)
 
     # Assuming ID and other operations are similar for each pair
     id_assignments = read_id_assignments()
     grf_id, version = get_grf_id_and_version(output_nml, id_assignments)
     
-    update_language_file(os.path.join(output_dir, 'lang', 'english.lng'), country_code, region_code, subregion_code, version, num_towns, lowest_population)
+    update_language_file(country_code, region_code, subregion_code, version, num_towns, lowest_population)
 
     write_nml_file(output_nml, grf_id, version, town_records, min_weight, scale)
-    compile_and_deploy_grf(output_nml, output_grf, OPENTTD_DIR)
+    if USE_OPENTTD_DIR:
+        compile_and_deploy_grf(output_nml, output_grf, OPENTTD_DIR)
+    else:
+        if not os.path.exists(BASE_PATH + "/Output"):
+            os.makedirs(BASE_PATH + "/Output", exist_ok=True)
+        compile_and_deploy_grf(output_nml, output_grf, BASE_PATH + "\Output")
     print(f"Processed {len(town_records)} towns for {country_code} {region_code} {subregion_code}")
+
+def take_input():
+    data_input = []
+    while True:
+        user_input = input("Enter a country code, region code, and subregion code separated by periods (e.g. FR.53.22) or enter 'done' to finish: ")
+        if user_input == "done":
+            break
+        data_input.append(user_input)
+    return data_input
+
+
+def get_input(data_input):  
+    input_list_data = []
+    for code in data_input:
+        parts = code.split(".")
+        if len(parts) == 3:
+            country_code, region_code, subregion_code = parts
+        elif len(parts) == 2:
+            country_code, region_code = parts
+            subregion_code = ""
+        else:
+            country_code = parts[0]
+            region_code = ""
+            subregion_code = ""
+        country_name, region_name, subregion_name = get_country_region_subregion_names(country_code, region_code, subregion_code)
+        print (f"{country_name} {region_name} {subregion_name}")
+        user_input = input("Do you want to add this code combination to the data input list? (yes = y, no = n, add all = a): ")
+        if user_input == "y":
+            input_list_data.append(code)
+        elif user_input == "a":
+            input_list_data.append(code)
+
+    return input_list_data
+
+def split_input(code):
+    parts = code.split(".")
+    if len(parts) == 3:
+        country_code, region_code, subregion_code = parts
+    elif len(parts) == 2:
+        country_code, region_code = parts
+        subregion_code = ""
+    else:
+        country_code = parts[0]
+        region_code = ""
+        subregion_code = ""
+    return country_code, region_code, subregion_code
 
 def main():
     #check if the data directory exists and if not create it
@@ -304,12 +361,16 @@ def main():
     if not os.path.exists(DATA_PATH):
         os.makedirs(DATA_PATH, exist_ok=True)
     for file in LIST_OF_DATA_FILES:
-        if not os.path.exists(os.path.join(DATA_PATH, file)):
+        file_text = file.replace(".zip", ".txt")
+        if not os.path.exists(os.path.join(DATA_PATH, file_text)):
             download_data_files(file)
             print(f"Downloaded {file}")
-
-    for country_region in COUNTRY_REGION_TRIPLES:
-        country_code, region_code, subregion_code = country_region
+    data_input = take_input()
+    print("Data input list:")
+    print(data_input)
+    for code in data_input:
+        print(f"Processing {code}")
+        country_code, region_code, subregion_code = split_input(code)
         process_country_region(country_code, region_code, subregion_code)
 
 if __name__ == "__main__":
