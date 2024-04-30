@@ -6,8 +6,8 @@ from datetime import datetime
 from to_precision import to_precision
 
 # Constants
-COUNTRY_CODE = "GB"
-REGION_CODE = "ENG"
+COUNTRY_REGION_PAIRS = [["GB", ""], ["GB", "ENG"], ["GB", "SCT"], ["GB", "WLS"], ["FR", ""], ["DE", ""], ["IT", ""], ["US", ""], ["CA", ""], ["JP", ""], ["RU", ""], ["CN", ""], ["IN", ""], ["AU", ""], ["NZ", ""], ["BR", ""], ["PH", ""], ["ES", ""], ["", ""]]
+# COUNTRY_REGION_PAIRS = [["GB", ""]]
 
 SORT_BY_POPULATION = True
 POPULATION_THRESHOLD = 0
@@ -24,23 +24,14 @@ COLUMN_TYPE_SUB_TYPE_LOC = 7
 COLUMN_POPULATION = 14
 COLUMN_NAME = 1
 
+OPENTTD_DIR = r"D:\Documents\OpenTTD\content_download\newgrf\Taby_Town_Names"
 MAX_TOWNS = 16320  # Due to OpenTTD limit
 
 # File Paths
-BASE_PATH = r"D:\Files\Code\OpenTTD NewGRF\Taby Town Names"
-OPENTTD_DIR = r"D:\Documents\OpenTTD\content_download\newgrf\Taby Town Names"
+BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 DATA_PATH = os.path.join(BASE_PATH, "Data")
-FILE_COUNTRY_CODE = "World" if COUNTRY_CODE == "" else COUNTRY_CODE
-REGIONAL_DIR = f"Taby {FILE_COUNTRY_CODE}{' ' + REGION_CODE if REGION_CODE else ''} Town Names"
-OUTPUT_DIR = os.path.join(BASE_PATH, REGIONAL_DIR)
-OUTPUT_NML = os.path.join(OUTPUT_DIR, f"Taby {FILE_COUNTRY_CODE}{' ' + REGION_CODE if REGION_CODE else ''} Town Names.nml")
-OUTPUT_GRF = os.path.join(OUTPUT_DIR, f"Taby {FILE_COUNTRY_CODE}{' ' + REGION_CODE if REGION_CODE else ''} Town Names.grf")
 ID_FILE = os.path.join(BASE_PATH, "file_id.txt")
 MERGED_FILE = os.path.join(DATA_PATH, "allCountries.txt")
-SINGLE_FILE = os.path.join(DATA_PATH, "Data", f"{FILE_COUNTRY_CODE}.txt")
-if COUNTRY_CODE == "":
-    input_data = MERGED_FILE
-input_data = MERGED_FILE if MERGED_FILE_OVERIDE or COUNTRY_CODE == "" else SINGLE_FILE
 BOILERPLATE_START = """grf {{
     grfid: "{grf_id}";
     name: string(STR_GRF_NAME);
@@ -60,12 +51,26 @@ def compile_and_deploy_grf(output_nml, output_grf, openttd_dir):
     os.chdir(os.path.dirname(output_nml))
     subprocess.run(["nmlc", output_nml])
     subprocess.run(["copy", output_grf, openttd_dir], shell=True)
+    print(f"Deployed {output_grf} to {openttd_dir}")
 
 def read_id_assignments():
+    id_assignments = {}
     if os.path.exists(ID_FILE):
         with open(ID_FILE, 'r') as file:
-            return {line.split(',')[0].strip(): (line.split(',')[1].strip(), int(line.split(',')[2].strip())) for line in file}
-    return {}
+            for line in file:
+                parts = line.split(',')
+                if len(parts) == 3:
+                    nml_path = parts[0].strip()
+                    grf_id = parts[1].strip()
+                    try:
+                        version = int(parts[2].strip())
+                        id_assignments[nml_path] = (grf_id, version)
+                    except ValueError:
+                        print(f"Error parsing version number from line: {line.strip()}")
+                else:
+                    print(f"Invalid line format: {line.strip()}")
+    return id_assignments
+
 
 def write_id_assignments(assignments):
     with open(ID_FILE, 'w') as file:
@@ -91,11 +96,11 @@ def get_country_name(country_code):
                 return columns[4]
     return ""
 
-def get_region_name(region_code):
+def get_region_name(country_code, region_code):
     with open(os.path.join(DATA_PATH, "admin1CodesASCII.txt"), 'r', encoding='utf-8') as f:
         for line in f:
             columns = line.split('\t')
-            if columns[0] == COUNTRY_CODE + "." + REGION_CODE:
+            if columns[0] == f"{country_code}.{region_code}":
                 return columns[1]
     return ""
 
@@ -104,7 +109,7 @@ def update_language_file(lang_file_path, country_code, region_code, version, num
         with open(lang_file_path, 'r', encoding='utf-8') as file:
             content = file.read()
         country_name = get_country_name(country_code)
-        region_name = get_region_name(region_code)
+        region_name = get_region_name(country_code, region_code)
         if region_name == "":
             country_name_a = f"{country_name}".strip()
         else:
@@ -131,13 +136,19 @@ def update_language_file(lang_file_path, country_code, region_code, version, num
     else:
         print(f"Language file not found: {lang_file_path}")
 
-def read_and_process_towns(file_path):
+def read_and_process_towns(file_path, country_code, region_code):
     towns = []
     with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
             columns = line.split('\t')
-            if (COUNTRY_CODE and columns[COLUMN_COUNTRY] != COUNTRY_CODE) or \
-               (REGION_CODE and columns[COLUMN_REGION] != REGION_CODE) or \
+            # if (COUNTRY_CODE and columns[COLUMN_COUNTRY] != COUNTRY_CODE) or \
+            #    (REGION_CODE and columns[COLUMN_REGION] != REGION_CODE) or \
+            #    (columns[COLUMN_FEATURE_TYPE_LOC] != COLUMN_FEATURE_TYPE) or \
+            #     (COLUMN_TYPE_SUB_TYPE and columns[COLUMN_TYPE_SUB_TYPE_LOC] not in COLUMN_TYPE_SUB_TYPE) or \
+            #    (int(columns[COLUMN_POPULATION]) < POPULATION_THRESHOLD):
+            #     continue
+            if (country_code and columns[COLUMN_COUNTRY] != country_code) or \
+               (region_code and columns[COLUMN_REGION] != region_code) or \
                (columns[COLUMN_FEATURE_TYPE_LOC] != COLUMN_FEATURE_TYPE) or \
                 (COLUMN_TYPE_SUB_TYPE and columns[COLUMN_TYPE_SUB_TYPE_LOC] not in COLUMN_TYPE_SUB_TYPE) or \
                (int(columns[COLUMN_POPULATION]) < POPULATION_THRESHOLD):
@@ -170,18 +181,35 @@ def write_nml_file(output_nml, grf_id, version, town_records, min_weight, scale)
             f_out.write(full_name)
         f_out.write("}\n}\n")
 
-def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+def determine_input_data(country_code, region_code):
+    if MERGED_FILE_OVERIDE or country_code == "":
+        return MERGED_FILE
+    return os.path.join(DATA_PATH, "Data", f"{country_code}.txt")
+
+
+        
+
+def process_country_region(country_code, region_code):
+    # Adjust file paths and names based on country and region
+    country_file_code = country_code if country_code else "World"
+    regional_dir = f"Taby_{country_file_code}{'_' + region_code if region_code else ''}_Town_Names"
+    output_dir = os.path.join(BASE_PATH, regional_dir)
+    output_nml = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}_Town_Names.nml")
+    output_grf = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}_Town_Names.grf")
+
+    os.makedirs(output_dir, exist_ok=True)
     template_dir = os.path.join(BASE_PATH, "Template")
     try:
-        shutil.copytree(template_dir, OUTPUT_DIR, dirs_exist_ok=True)
+        shutil.copytree(template_dir, output_dir, dirs_exist_ok=True)
     except FileExistsError:
         print("Directory already exists, contents will be merged")
 
+    # Assuming ID and other operations are similar for each pair
     id_assignments = read_id_assignments()
-    grf_id, version = get_grf_id_and_version(OUTPUT_NML, id_assignments)
+    grf_id, version = get_grf_id_and_version(output_nml, id_assignments)
 
-    town_records = read_and_process_towns(input_data)
+    input_data = determine_input_data(country_code, region_code)  # Ensure this function decides based on country and region
+    town_records = read_and_process_towns(input_data, country_code, region_code)
     town_records = sort_town_records(town_records, SORT_BY_POPULATION)
     town_records = town_records[:MAX_TOWNS]
     min_weight, scale = calculate_town_weights(town_records)
@@ -196,13 +224,17 @@ def main():
     else:
         lowest_population = "{:,}".format(int(to_precision(town_records[-1][1], 3, 'std')))
         lowest_population = f" that have a population of {lowest_population} and higher"
+    
+    update_language_file(os.path.join(output_dir, 'lang', 'english.lng'), country_code, region_code, version, num_towns, lowest_population)
 
+    write_nml_file(output_nml, grf_id, version, town_records, min_weight, scale)
+    compile_and_deploy_grf(output_nml, output_grf, OPENTTD_DIR)
+    print(f"Processed {len(town_records)} towns for {country_code} {region_code}")
 
-    update_language_file(os.path.join(OUTPUT_DIR, 'lang', 'english.lng'), COUNTRY_CODE, REGION_CODE, version, num_towns, lowest_population)
-
-    write_nml_file(OUTPUT_NML, grf_id, version, town_records, min_weight, scale)
-    compile_and_deploy_grf(OUTPUT_NML, OUTPUT_GRF, OPENTTD_DIR)
-    print(f"Processed {len(town_records)} towns")
+def main():
+    for country_region in COUNTRY_REGION_PAIRS:
+        country_code, region_code = country_region
+        process_country_region(country_code, region_code)
 
 if __name__ == "__main__":
     main()
