@@ -269,55 +269,40 @@ def compile_and_deploy_grf(output_nml, output_grf, openttd_dir):
         except subprocess.CalledProcessError as e:
             print(f"Error occurred during deployment: {e}")
 
-def read_id_assignments():
+def manage_id_assignments(output_nml):
     id_assignments = {}
+    id_used = set()
+    id_gap = None
+
+    # Read existing assignments and populate the dictionary
     if os.path.exists(ID_FILE):
         with open(ID_FILE, 'r') as file:
             for line in file:
-                parts = line.split(',')
+                parts = line.strip().split(',')
                 if len(parts) == 3:
-                    location_dir = parts[0].strip()
-                    grf_id = parts[1].strip()
-                    try:
-                        version = int(parts[2].strip())
-                        id_assignments[location_dir] = (grf_id, version)
-                    except ValueError:
-                        print(f"Error parsing version number from line: {line.strip()}")
-                else:
-                    print(f"Invalid line format: {line.strip()}")
-    return id_assignments
-
-
-def write_id_assignments(assignments):
-    print(f"Writing ID assignments to {ID_FILE}")
-    # with open(ID_FILE, 'w') as file:
-    #     for key, (id, version) in assignments.items():
-    #         file.write(f"{key},{id},{version}\n")
-
-def get_grf_id_and_version(output_nml, id_assignments):
-    if output_nml not in id_assignments:
-        new_id = f"TA{len(id_assignments) + 1:02}"
-        version = 1
+                    location_dir, grf_id, version = parts[0].strip(), parts[1].strip(), int(parts[2].strip())
+                    id_assignments[location_dir] = (grf_id, version)
+                    id_used.add(int(grf_id[2:]))
+    # Find the smallest unused ID in the existing sequence
+    for i in range(1, len(id_assignments) + 2):  # +2 to ensure a new ID if all are used sequentially
+        if i not in id_used:
+            id_gap = f"TA{i:02}"
+            break
+    # Assign ID and version
+    if output_nml in id_assignments:
+        grf_id, version = id_assignments[output_nml]
+        version += 1  # Increment version if already exists
     else:
-        new_id, version = id_assignments[output_nml]
-        version += 1
-    id_assignments[output_nml] = (new_id, version)
-    write_id_assignments(id_assignments)
-    return new_id, version
-
-
-def get_grf_id_and_version(output_nml, id_assignments):
-    with open(ID_FILE, 'r') as f:
-        existing_ids = f.read().splitlines()
-    if output_nml not in id_assignments:
-        new_id = f"TA{len(existing_ids) + 1:02}"
+        grf_id = id_gap if id_gap else f"TA{len(id_assignments) + 1:02}"
         version = 1
-    else:
-        new_id, version = id_assignments[output_nml]
-        version += 1
-    id_assignments[output_nml] = (new_id, version)
-    write_id_assignments(id_assignments)
-    return new_id, version
+    # Update the dictionary with the new or updated version
+    id_assignments[output_nml] = (grf_id, version)
+
+    # Write all data back to the file
+    with open(ID_FILE, 'w') as file:
+        for location, (id_, ver) in id_assignments.items():
+            file.write(f"{location},{id_},{ver}\n")
+    return grf_id, version
 
 def process_country_region(country_code, region_code, subregion_code):
     # Adjust file paths and names based on country and region
@@ -331,8 +316,7 @@ def process_country_region(country_code, region_code, subregion_code):
     town_records, min_weight, scale, num_towns, lowest_population = process_town_data(country_code, region_code, subregion_code)
 
     # Assuming ID and other operations are similar for each pair
-    id_assignments = read_id_assignments()
-    grf_id, version = get_grf_id_and_version(location_dir, id_assignments)
+    grf_id, version = manage_id_assignments(location_dir)
     
     update_language_file(output_dir, country_code, region_code, subregion_code, version, num_towns, lowest_population)
 
