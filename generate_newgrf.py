@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from to_precision import to_precision
-
+import ctypes.wintypes
 # Constants
 # DATA_INPUT = ["FR.53.22", "GB.ENG.GLA", "GB.ENG", "GB"]
 DATA_INPUT = ["GB", "FR", "DE", "ES", "IT", "NL", "SE", "CH", "RU" ,"US", "CA", "AU", "BR", "CN", "IN", "JP", "MX", "KR", "NZ", "PH", "GB.ENG", "GB.SCT", "GB.WLS"]
@@ -27,7 +27,6 @@ COLUMN_NAME = 1
 
 
 USE_OPENTTD_DIR = True
-OPENTTD_DIR = r"D:\Documents\OpenTTD\content_download\newgrf\Taby_Town_Names"
 MAX_TOWNS = 16320  # Due to OpenTTD limit
 
 # File Paths
@@ -36,9 +35,12 @@ DATA_PATH = os.path.join(BASE_PATH, "Data")
 DATA_URL = "https://download.geonames.org/export/dump/"
 LIST_OF_DATA_FILES = ["countryInfo.txt", "admin1CodesASCII.txt", "admin2Codes.txt", "featureCodes_en.txt", "cities15000.zip", "cities5000.zip", "cities1000.zip", "cities500.zip"]
 GITHHUB_COUNTRY_DEMOONYM_URL = "https://raw.githubusercontent.com/mledoze/countries/blob/master/dist/countries.csv"
+NEWGRF_LICENSE_URL = "https://www.gnu.org/licenses/gpl-2.0.txt"
 #TODO: add the github url for the country demonyms file
 ID_FILE = os.path.join(BASE_PATH, "file_id.txt")
-BOILERPLATE_START = """grf {{
+
+
+NML_BOILERPLATE = """grf {{
     grfid: "{grf_id}";
     name: string(STR_GRF_NAME);
     desc: string(STR_GRF_DESC);
@@ -51,57 +53,27 @@ town_names {{
     styles: string(STR_GAME_OPTIONS_TOWN_NAME);
     {{
 """
+LANG_FILE_BOILERPLATE = """##grflangid 0x00
+STR_GRF_NAME                    :Taby [COUNTRY_NAME_A] Town Names {BLUE}v1.[VERSION]
+STR_GRF_DESC                    :{ORANGE}Taby [COUNTRY_NAME_A] Town Names{BLUE}v1.[VERSION]{}{}{WHITE}This NewGRF adds names for towns and cities[LOWEST_POPULATION] in [COUNTRY_NAME_B]. This set has over [NUM_TOWNS] towns with their spawn chance roughly based on the population of the town.{}{}The database of town names and other place names was taken from {LTBLUE}www.geonames.org.{}{}{BLACK}Made by: {GREEN}Tabytac{}{BLACK}Updated: {GREEN}[DATE]{}{}{SILVER}This grf is released under GNU GPL v3 or higher.
+STR_GRF_URL                     :https://github.com/Tabytac/Taby-Town-Names
+STR_GAME_OPTIONS_TOWN_NAME      :Taby [COUNTRY_NAME_A] Town Names
+"""
 
 # Functions
-def compile_and_deploy_grf(output_nml, output_grf, openttd_dir):
-    os.chdir(os.path.dirname(output_nml))
-    subprocess.run(["nmlc", output_nml])
-    print(f"Compiled {output_nml} to {output_grf}")
-    subprocess.run(["copy", output_grf, openttd_dir], shell=True)
-    print(f"Deployed {output_grf} to {openttd_dir}")
 
-def read_id_assignments():
-    id_assignments = {}
-    if os.path.exists(ID_FILE):
-        with open(ID_FILE, 'r') as file:
-            for line in file:
-                parts = line.split(',')
-                if len(parts) == 3:
-                    nml_path = parts[0].strip()
-                    grf_id = parts[1].strip()
-                    try:
-                        version = int(parts[2].strip())
-                        id_assignments[nml_path] = (grf_id, version)
-                    except ValueError:
-                        print(f"Error parsing version number from line: {line.strip()}")
-                else:
-                    print(f"Invalid line format: {line.strip()}")
-    return id_assignments
+def get_openttd_dir():
+    buffer = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+    ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer)
+    return os.path.join(buffer.value, "OpenTTD", "content_download", "newgrf", "Taby_Town_Names")
 
-
-def write_id_assignments(assignments):
-    with open(ID_FILE, 'w') as file:
-        for key, (id, version) in assignments.items():
-            file.write(f"{key},{id},{version}\n")
-
-def get_grf_id_and_version(output_nml, id_assignments):
-    if output_nml not in id_assignments:
-        new_id = f"TA{len(id_assignments) + 1:02}"
-        version = 1
-    else:
-        new_id, version = id_assignments[output_nml]
-        version += 1
-    id_assignments[output_nml] = (new_id, version)
-    write_id_assignments(id_assignments)
-    return new_id, version
-
+OPENTTD_DIR = get_openttd_dir() if input("Do you want to use the default OpenTTD directory? (yes = y, no = n): ") == "y" else input("Enter the directory where the GRF should be copied: ")
 def get_name(code, file_path, column_index):
     with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
             columns = line.split('\t')
             if columns[0] == code:
                 return columns[column_index]
-    return ""
 
 def get_country_region_subregion_names(country_code, region_code, subregion_code):
     country_name = ""
@@ -115,17 +87,19 @@ def get_country_region_subregion_names(country_code, region_code, subregion_code
         subregion_name = get_name(f"{country_code}.{region_code}.{subregion_code}", os.path.join(DATA_PATH, "admin2Codes.txt"), 1)
     return country_name, region_name, subregion_name
 
-def prepare_output_dir(country_code, region_code, subregion_code):
-    os.makedirs(output_dir, exist_ok=True)
-    #instead of copying the template directory, make a new directory and create the english.lng file in it
-    template_dir = os.path.join(BASE_PATH, "Template")
-    try:
-        shutil.copytree(template_dir, output_dir, dirs_exist_ok=True)
-    except FileExistsError:
-        print("Directory already exists, contents will be merged")
+def prepare_output_dir(output_dir, country_code, region_code, subregion_code):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+    if not os.path.exists(os.path.join(output_dir, 'lang')):
+        os.makedirs(os.path.join(output_dir, 'lang'), exist_ok=True)
+    if not os.path.exists(os.path.join(output_dir, 'lang', 'english.lng')):
+        with open(os.path.join(output_dir, 'lang', 'english.lng'), 'w', encoding='utf-8') as file:
+            file.write(LANG_FILE_BOILERPLATE)
+    if not os.path.exists(os.path.join(output_dir, 'license.txt')):
+        subprocess.run(["curl", "-o", os.path.join(output_dir, 'license.txt'), NEWGRF_LICENSE_URL], check=True)
 
 
-def update_language_file(country_code, region_code, subregion_code, version, num_towns, lowest_population):
+def update_language_file(output_dir, country_code, region_code, subregion_code, version, num_towns, lowest_population):
     lang_file_path = os.path.join(output_dir, 'lang', 'english.lng')
     #if the lang file not exits, make the folder, then english.lng file 
     if not os.path.exists(lang_file_path):
@@ -197,7 +171,7 @@ def calculate_town_weights(town_records):
 
 def write_nml_file(output_nml, grf_id, version, town_records, min_weight, scale):
     with open(output_nml, 'w+', encoding='utf-8') as f_out:
-        f_out.write(BOILERPLATE_START.format(grf_id=grf_id, version=version))
+        f_out.write(NML_BOILERPLATE.format(grf_id=grf_id, version=version))
         for name, _, weight in town_records:
             scaled_weight = max(1, min(int((weight - min_weight) * scale), 127))
             full_name = f"\ttext(\"{name}\", {scaled_weight}),\n"
@@ -282,6 +256,68 @@ def process_town_data(country_code, region_code, subregion_code):
         lowest_population = f" that have a population of {lowest_population} and higher"
     return town_records, min_weight, scale, num_towns, lowest_population
 
+def compile_and_deploy_grf(output_nml, output_grf, openttd_dir):
+        os.chdir(os.path.dirname(output_nml))
+        try:
+            subprocess.run(["nmlc", output_nml], check=True)
+            print(f"Compiled {output_nml}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred during compilation: {e}")
+        try:
+            subprocess.run(["copy", output_grf, openttd_dir], shell=True, check=True)
+            print(f"Deployed {output_grf} to {openttd_dir}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred during deployment: {e}")
+
+def read_id_assignments():
+    id_assignments = {}
+    if os.path.exists(ID_FILE):
+        with open(ID_FILE, 'r') as file:
+            for line in file:
+                parts = line.split(',')
+                if len(parts) == 3:
+                    location_dir = parts[0].strip()
+                    grf_id = parts[1].strip()
+                    try:
+                        version = int(parts[2].strip())
+                        id_assignments[location_dir] = (grf_id, version)
+                    except ValueError:
+                        print(f"Error parsing version number from line: {line.strip()}")
+                else:
+                    print(f"Invalid line format: {line.strip()}")
+    return id_assignments
+
+
+def write_id_assignments(assignments):
+    print(f"Writing ID assignments to {ID_FILE}")
+    # with open(ID_FILE, 'w') as file:
+    #     for key, (id, version) in assignments.items():
+    #         file.write(f"{key},{id},{version}\n")
+
+def get_grf_id_and_version(output_nml, id_assignments):
+    if output_nml not in id_assignments:
+        new_id = f"TA{len(id_assignments) + 1:02}"
+        version = 1
+    else:
+        new_id, version = id_assignments[output_nml]
+        version += 1
+    id_assignments[output_nml] = (new_id, version)
+    write_id_assignments(id_assignments)
+    return new_id, version
+
+
+def get_grf_id_and_version(output_nml, id_assignments):
+    with open(ID_FILE, 'r') as f:
+        existing_ids = f.read().splitlines()
+    if output_nml not in id_assignments:
+        new_id = f"TA{len(existing_ids) + 1:02}"
+        version = 1
+    else:
+        new_id, version = id_assignments[output_nml]
+        version += 1
+    id_assignments[output_nml] = (new_id, version)
+    write_id_assignments(id_assignments)
+    return new_id, version
 
 def process_country_region(country_code, region_code, subregion_code):
     # Adjust file paths and names based on country and region
@@ -290,15 +326,15 @@ def process_country_region(country_code, region_code, subregion_code):
     output_dir = os.path.join(BASE_PATH, "Source_Files", location_dir)
     output_nml = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.nml")
     output_grf = os.path.join(output_dir, f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.grf")
-    prepare_output_dir(country_code, region_code, subregion_code)
+    prepare_output_dir(output_dir, country_code, region_code, subregion_code)
     
     town_records, min_weight, scale, num_towns, lowest_population = process_town_data(country_code, region_code, subregion_code)
 
     # Assuming ID and other operations are similar for each pair
     id_assignments = read_id_assignments()
-    grf_id, version = get_grf_id_and_version(output_nml, id_assignments)
+    grf_id, version = get_grf_id_and_version(location_dir, id_assignments)
     
-    update_language_file(country_code, region_code, subregion_code, version, num_towns, lowest_population)
+    update_language_file(output_dir, country_code, region_code, subregion_code, version, num_towns, lowest_population)
 
     write_nml_file(output_nml, grf_id, version, town_records, min_weight, scale)
     if USE_OPENTTD_DIR:
@@ -306,13 +342,13 @@ def process_country_region(country_code, region_code, subregion_code):
     else:
         if not os.path.exists(BASE_PATH + "/Output"):
             os.makedirs(BASE_PATH + "/Output", exist_ok=True)
-        compile_and_deploy_grf(output_nml, output_grf, BASE_PATH + "\Output")
+        compile_and_deploy_grf(output_nml, output_grf, BASE_PATH + "\\Output")
     print(f"Processed {len(town_records)} towns for {country_code} {region_code} {subregion_code}")
 
 def take_input():
     data_input = []
     while True:
-        user_input = input("Enter a country code, region code, and subregion code separated by periods (e.g. GB.ENG.GLA for all names in London) or enter 'done' to finish: ")
+        user_input = input("Enter a country code, region code, and subregion code separated by periods (e.g. GB.ENG.GLA for all names in London) or leave blank for the world. Enter 'done' when finished: ")
         if user_input == "done":
             break
         data_input.append(user_input)
@@ -333,12 +369,7 @@ def get_input(data_input):
             region_code = ""
             subregion_code = ""
         country_name, region_name, subregion_name = get_country_region_subregion_names(country_code, region_code, subregion_code)
-        print (f"{country_name} {region_name} {subregion_name}")
-        user_input = input("Do you want to add this code combination to the data input list? (yes = y, no = n, add all = a): ")
-        if user_input == "y":
-            input_list_data.append(code)
-        elif user_input == "a":
-            input_list_data.append(code)
+        input_list_data.append(code)
 
     return input_list_data
 
@@ -356,8 +387,7 @@ def split_input(code):
     return country_code, region_code, subregion_code
 
 def main():
-    #check if the data directory exists and if not create it
-    #check if the correct files are in the data directory
+
     if not os.path.exists(DATA_PATH):
         os.makedirs(DATA_PATH, exist_ok=True)
     for file in LIST_OF_DATA_FILES:
@@ -365,11 +395,13 @@ def main():
         if not os.path.exists(os.path.join(DATA_PATH, file_text)):
             download_data_files(file)
             print(f"Downloaded {file}")
-    data_input = take_input()
+    if input("Do you want to use the data input list? (yes = y, no = n): ") == "y":
+        data_input = get_input(DATA_INPUT)
+    else:
+        data_input = take_input()
     print("Data input list:")
     print(data_input)
     for code in data_input:
-        print(f"Processing {code}")
         country_code, region_code, subregion_code = split_input(code)
         process_country_region(country_code, region_code, subregion_code)
 
