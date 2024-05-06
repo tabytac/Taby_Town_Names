@@ -1,13 +1,11 @@
 import math
 import os
 import csv
-import shutil
 import subprocess
 from datetime import datetime
 import ctypes.wintypes
 
-# Constants
-# DATA_INPUT = ["FR.53.22", "GB.ENG.GLA", "GB.ENG", "GB"]
+# Constants to modify
 DATA_INPUT = [
     "GB",
     "FR",
@@ -37,12 +35,13 @@ DATA_INPUT = [
 
 SORT_BY_POPULATION = True
 POPULATION_THRESHOLD = 0
-MERGED_FILE_OVERIDE = False
+MERGED_FILE_OVERRIDE = False
+USE_OPENTTD_DIR = True
+MAX_TOWNS = 16320  # Due to OpenTTD limit
 
-# Column Indices
+# Constants to not modify
 COLUMN_FEATURE_TYPE = "P"
 COLUMN_TYPE_SUB_TYPE = []
-
 COLUMN_COUNTRY = 8
 COLUMN_REGION = 10
 COLUMN_SUBREGION = 11
@@ -50,11 +49,6 @@ COLUMN_FEATURE_TYPE_LOC = 6
 COLUMN_TYPE_SUB_TYPE_LOC = 7
 COLUMN_POPULATION = 14
 COLUMN_NAME = 1
-
-USE_OPENTTD_DIR = True
-MAX_TOWNS = 16320  # Due to OpenTTD limit
-
-# File Paths
 BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 DATA_PATH = os.path.join(BASE_PATH, "Data")
 DATA_URL = "https://download.geonames.org/export/dump/"
@@ -68,7 +62,7 @@ LIST_OF_DATA_FILES = [
     "cities1000.zip",
     "cities500.zip",
 ]
-GITHHUB_COUNTRY_DEMONYM_URL = (
+GITHUB_COUNTRY_DEMONYM_URL = (
     "https://raw.githubusercontent.com/mledoze/countries/master/dist/countries.csv"
 )
 DEMONYM_COUNTRY_CODE_COLUMN = 3
@@ -90,7 +84,7 @@ town_names {{
     {{
 """
 LANG_FILE_BOILERPLATE = """##grflangid 0x00
-STR_GRF_NAME                    :Taby [COUNTRY_NAME_A] Town Names {BLUE}v1.[VERSION]
+STR_GRF_NAME                    :Taby [COUNTRY_NAME_A] Town Names {SILVER}v1.[VERSION]
 STR_GRF_DESC                    :{ORANGE}Taby [COUNTRY_NAME_A] Town Names {BLUE}v1.[VERSION]{}{}{WHITE}This NewGRF adds names for towns and cities[LOWEST_POPULATION] in [COUNTRY_NAME_B]. This set has over [NUM_TOWNS] towns with their spawn chance roughly based on the population of the town.{}{}The database of town names and other place names was taken from {LTBLUE}www.geonames.org.{}{}{BLACK}Made by: {GREEN}Tabytac{}{BLACK}Updated: {GREEN}[DATE]{}{}{SILVER}This grf is released under GNU GPL v3 or higher.
 STR_GRF_URL                     :https://github.com/Tabytac/Taby-Town-Names
 STR_GAME_OPTIONS_TOWN_NAME      :Taby [COUNTRY_NAME_A] Town Names
@@ -145,7 +139,7 @@ def get_country_region_subregion_names(country_code, region_code,
 
 def get_country_demonym(country_code):
     if not os.path.exists(os.path.join(DATA_PATH, "countries.csv")):
-        download_data_files("countries.csv", GITHHUB_COUNTRY_DEMONYM_URL)
+        download_data_files("countries.csv", GITHUB_COUNTRY_DEMONYM_URL)
     with open(os.path.join(DATA_PATH, "countries.csv"), "r",
               encoding="utf-8") as f:
         reader = csv.reader(f)
@@ -299,7 +293,7 @@ def write_nml_file(output_nml, grf_id, version, town_records, min_weight,
 
 def determine_input_data(country_code):
     # Check if merged file should be used
-    if MERGED_FILE_OVERIDE or country_code == "":
+    if MERGED_FILE_OVERRIDE or country_code == "":
         if not os.path.exists(os.path.join(DATA_PATH, "allCountries.txt")):
             download_data_files("allCountries.zip",
                                 DATA_URL + "allCountries.zip")

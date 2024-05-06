@@ -27,7 +27,5 @@ To install Taby Town Names, follow these steps:
 
 ## License
 The Python script and all generated files in this project are licensed under the GPL-2.0 License. See [LICENSE](LICENSE) for more information.
-
 The GeoNames database is licensed under Creative Commons Attribution 4.0 International. To view a copy of this license, visit [here](https://creativecommons.org/licenses/by/4.0/).
-
 The countries.csv file, taken from the [mledoze/countries](https://github.com/mledoze/countries) repository, is used to map country names with their respective demonyms, and is licensed under the [ODbL License](https://opendatacommons.org/licenses/odbl/1-0/).
