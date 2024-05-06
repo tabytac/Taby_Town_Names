@@ -90,6 +90,7 @@ STR_GRF_URL                     :https://github.com/Tabytac/Taby-Town-Names
 STR_GAME_OPTIONS_TOWN_NAME      :Taby [COUNTRY_NAME_A] Town Names
 """
 
+
 # Functions
 
 
@@ -102,7 +103,7 @@ def get_openttd_dir():
 
 OPENTTD_DIR = (get_openttd_dir() if input(
     "Do you want to use the default OpenTTD directory? (yes = y, no = n): ")
-               == "y" else
+                                    == "y" else
                input("Enter the directory where the GRF should be copied: "))
 
 
@@ -150,7 +151,7 @@ def get_country_demonym(country_code):
                     '"').strip("'")
 
 
-def prepare_output_dir(output_dir, country_code, region_code, subregion_code):
+def prepare_output_dir(output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     if not os.path.exists(os.path.join(output_dir, "lang")):
@@ -193,13 +194,13 @@ def to_precision(num, sig_figs):
 
 
 def update_language_file(
-    output_dir,
-    country_code,
-    region_code,
-    subregion_code,
-    version,
-    num_towns,
-    lowest_population,
+        output_dir,
+        country_code,
+        region_code,
+        subregion_code,
+        version,
+        num_towns,
+        lowest_population,
 ):
     lang_file_path = os.path.join(output_dir, "lang", "english.lng")
     # if the lang file not exits, make the folder, then english.lng file
@@ -251,10 +252,10 @@ def read_and_process_towns(file_path, country_code, region_code,
                     or (region_code and columns[COLUMN_REGION] != region_code)
                     or (subregion_code
                         and columns[COLUMN_SUBREGION] != subregion_code) or
-                (columns[COLUMN_FEATURE_TYPE_LOC] != COLUMN_FEATURE_TYPE) or
-                (COLUMN_TYPE_SUB_TYPE and columns[COLUMN_TYPE_SUB_TYPE_LOC]
-                 not in COLUMN_TYPE_SUB_TYPE) or
-                (int(columns[COLUMN_POPULATION]) < POPULATION_THRESHOLD)):
+                    (columns[COLUMN_FEATURE_TYPE_LOC] != COLUMN_FEATURE_TYPE) or
+                    (COLUMN_TYPE_SUB_TYPE and columns[COLUMN_TYPE_SUB_TYPE_LOC]
+                     not in COLUMN_TYPE_SUB_TYPE) or
+                    (int(columns[COLUMN_POPULATION]) < POPULATION_THRESHOLD)):
                 continue
             name = columns[COLUMN_NAME].replace("'",
                                                 "’").strip().replace('"', "'")
@@ -445,7 +446,7 @@ def process_country_region(country_code, region_code, subregion_code):
         output_dir,
         f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.grf",
     )
-    prepare_output_dir(output_dir, country_code, region_code, subregion_code)
+    prepare_output_dir(output_dir)
 
     town_records, min_weight, scale, num_towns, lowest_population = process_town_data(
         country_code, region_code, subregion_code)
@@ -491,20 +492,7 @@ def take_input():
 def get_input(data_input):
     input_list_data = []
     for code in data_input:
-        parts = code.split(".")
-        if len(parts) == 3:
-            country_code, region_code, subregion_code = parts
-        elif len(parts) == 2:
-            country_code, region_code = parts
-            subregion_code = ""
-        else:
-            country_code = parts[0]
-            region_code = ""
-            subregion_code = ""
-        country_name, region_name, subregion_name = get_country_region_subregion_names(
-            country_code, region_code, subregion_code)
         input_list_data.append(code)
-
     return input_list_data
 
 
