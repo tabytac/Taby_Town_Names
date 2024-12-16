@@ -37,8 +37,8 @@ SORT_BY_POPULATION = True
 POPULATION_THRESHOLD = 0
 MERGED_FILE_OVERRIDE = False
 USE_OPENTTD_DIR = True
-MAX_TOWNS = 16320  # Approx due to OpenTTD limit (127 * 128)
-VERBOSE_OUTPUT = False  # Set to True for more detailed output
+MAX_TOWNS = 16320  # Aprox due to OpenTTD limit (127 * 128)
+VERBOSE_OUTPUT = False # Set to True for more detailed output
 
 # Constants to not modify
 COLUMN_FEATURE_TYPE = "P"
@@ -96,12 +96,14 @@ STR_GAME_OPTIONS_TOWN_NAME      :Taby [COUNTRY_NAME_A] Town Names
 def get_openttd_dir():
     buffer = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
     ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer)
-    return os.path.join(buffer.value, "OpenTTD", "newgrf", "Taby_Town_Names")
+    return os.path.join(buffer.value, "OpenTTD", "newgrf",
+                        "Taby_Town_Names")
 
 
 OPENTTD_DIR = (get_openttd_dir() if input(
-    "Do you want to use the default OpenTTD directory? (yes = y, no = n): ") == "y" else input(
-    "Enter the directory where the GRF should be copied: "))
+    "Do you want to use the default OpenTTD directory? (yes = y, no = n): ")
+               == "y" else
+               input("Enter the directory where the GRF should be copied: "))
 
 
 def get_name(code, file_path, column_index):
@@ -233,12 +235,14 @@ def read_and_process_towns(file_path, country_code, region_code, subregion_code)
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             columns = line.split("\t")
-            if ((country_code and columns[COLUMN_COUNTRY] != country_code) or (
-                    region_code and columns[COLUMN_REGION] != region_code) or (
-                    subregion_code and columns[COLUMN_SUBREGION] != subregion_code) or (
-                    columns[COLUMN_FEATURE_TYPE_LOC] != COLUMN_FEATURE_TYPE)
-                    or (COLUMN_TYPE_SUB_TYPE and columns[COLUMN_TYPE_SUB_TYPE_LOC] not in COLUMN_TYPE_SUB_TYPE) or (
-                            int(columns[COLUMN_POPULATION]) < POPULATION_THRESHOLD)):
+            if ((country_code and columns[COLUMN_COUNTRY] != country_code)
+                    or (region_code and columns[COLUMN_REGION] != region_code)
+                    or (subregion_code
+                        and columns[COLUMN_SUBREGION] != subregion_code) or
+                (columns[COLUMN_FEATURE_TYPE_LOC] != COLUMN_FEATURE_TYPE) or
+                (COLUMN_TYPE_SUB_TYPE and columns[COLUMN_TYPE_SUB_TYPE_LOC]
+                 not in COLUMN_TYPE_SUB_TYPE) or
+                (int(columns[COLUMN_POPULATION]) < POPULATION_THRESHOLD)):
                 continue
             name = columns[COLUMN_NAME].replace("'", "’").strip().replace('"', "'")
             if any(town[0] == name for town in towns):
@@ -363,7 +367,9 @@ def compile_and_deploy_grf(output_nml, output_grf, openttd_dir):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred during compilation: {e}")
     try:
-        subprocess.run(["copy", output_grf, openttd_dir], shell=True, check=True)
+        subprocess.run(["copy", output_grf, openttd_dir],
+                       shell=True,
+                       check=True)
         if VERBOSE_OUTPUT:
             print(f"Deployed {output_grf} to {openttd_dir}")
     except subprocess.CalledProcessError as e:
@@ -448,7 +454,9 @@ def process_country_region(country_code, region_code, subregion_code):
         if not os.path.exists(BASE_PATH + "/Output"):
             os.makedirs(BASE_PATH + "/Output", exist_ok=True)
         compile_and_deploy_grf(output_nml, output_grf, BASE_PATH + "\\Output")
-    print(f"Processed {len(town_records)} towns names for {country_code} {region_code} {subregion_code}")
+    print(
+        f"Processed {len(town_records)} towns names for {country_code} {region_code} {subregion_code}"
+    )
 
 
 def take_input():
