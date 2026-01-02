@@ -65,7 +65,7 @@ LIST_OF_DATA_FILES = [
 ]
 GITHUB_COUNTRY_DEMONYM_URL = "https://raw.githubusercontent.com/mledoze/countries/master/dist/countries.csv"
 DEMONYM_COUNTRY_CODE_COLUMN = 3
-DEMONYM_COUNTRY_DEMONYM_COLUMN = 64
+DEMONYM_COUNTRY_DEMONYM_COLUMN = 72
 NEWGRF_LICENSE_URL = "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt"
 ID_FILE = os.path.join(BASE_PATH, "file_id.txt")
 
