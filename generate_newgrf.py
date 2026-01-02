@@ -63,7 +63,7 @@ LIST_OF_DATA_FILES = [
     "cities1000.zip",
     "cities500.zip",
 ]
-GITHUB_COUNTRY_DEMONYM_URL = "https://raw.githubusercontent.com/mledoze/countries/master/dist/countries.csv"
+GITHUB_COUNTRY_DEMONYM_URL = "https://raw.githubusercontent.com/mledoze/countries/a70cdf918c64f5db6eae86c708db6e496d927529/dist/countries.csv"
 DEMONYM_COUNTRY_CODE_COLUMN = 3
 DEMONYM_COUNTRY_DEMONYM_COLUMN = 72
 NEWGRF_LICENSE_URL = "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt"
