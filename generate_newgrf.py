@@ -85,7 +85,7 @@ town_names {{
 LANG_FILE_BOILERPLATE = """##grflangid 0x00
 STR_GRF_NAME                    :Taby [COUNTRY_NAME_A] Town Names {SILVER}v1.[VERSION]
 STR_GRF_DESC                    :{ORANGE}Taby [COUNTRY_NAME_A] Town Names {BLUE}v1.[VERSION]{}{}{WHITE}This NewGRF adds names for towns and cities[LOWEST_POPULATION] in [COUNTRY_NAME_B]. This set has over [NUM_TOWNS] towns with their spawn chance roughly based on the population of the town.{}{}The database of town names and other place names was taken from {LTBLUE}www.geonames.org.{}{}{BLACK}Made by: {GREEN}Tabytac{}{BLACK}Updated: {GREEN}[DATE]{}{}{SILVER}This grf is released under GNU GPL v3 or higher.
-STR_GRF_URL                     :https://github.com/Tabytac/Taby-Town-Names
+STR_GRF_URL                     :https://github.com/tabytac/Taby_Town_Names
 STR_GAME_OPTIONS_TOWN_NAME      :Taby [COUNTRY_NAME_A] Town Names
 """
 
@@ -188,7 +188,7 @@ def to_precision(num, sig_figs):
 def update_language_file(
         output_dir,
         country_code,
-        region_code,
+        region_codes,
         subregion_code,
         version,
         num_towns,
@@ -205,8 +205,24 @@ def update_language_file(
             file.write('STR_GRF_URL: "\n')
     with open(lang_file_path, "r", encoding="utf-8") as file:
         content = file.read()
-    country_name, region_name, subregion_name = get_country_region_subregion_names(country_code, region_code,
-                                                                                   subregion_code)
+
+    # Handle multiple regions
+    if isinstance(region_codes, list) and len(region_codes) > 1:
+        # Multiple regions - get all region names
+        region_names = []
+        for region_code in region_codes:
+            _, region_name, _ = get_country_region_subregion_names(country_code, region_code, "")
+            if region_name:
+                region_names.append(region_name)
+        region_name = ", ".join(region_names) if region_names else ""
+        country_name, _, _ = get_country_region_subregion_names(country_code, "", "")
+        subregion_name = ""
+    else:
+        # Single region or no region
+        region_code = region_codes[0] if isinstance(region_codes, list) and region_codes else (region_codes if isinstance(region_codes, str) else "")
+        country_name, region_name, subregion_name = get_country_region_subregion_names(country_code, region_code,
+                                                                                       subregion_code)
+
     country_demonym = get_country_demonym(country_code)
     country_demonym_a = f"{country_demonym}".strip()
     if region_name != "":
@@ -230,13 +246,23 @@ def update_language_file(
         file.write(content)
 
 
-def read_and_process_towns(file_path, country_code, region_code, subregion_code):
+def read_and_process_towns(file_path, country_code, region_codes, subregion_code):
+    # Normalize region_codes to a list
+    if isinstance(region_codes, str):
+        region_codes = [region_codes] if region_codes else []
+    elif region_codes is None:
+        region_codes = []
+
     towns = []
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             columns = line.split("\t")
+            # If we have multiple regions, check if the town's region is in our list
+            region_match = (not region_codes or
+                          columns[COLUMN_REGION] in region_codes)
+
             if ((country_code and columns[COLUMN_COUNTRY] != country_code)
-                    or (region_code and columns[COLUMN_REGION] != region_code)
+                    or not region_match
                     or (subregion_code
                         and columns[COLUMN_SUBREGION] != subregion_code) or
                 (columns[COLUMN_FEATURE_TYPE_LOC] != COLUMN_FEATURE_TYPE) or
@@ -331,8 +357,9 @@ def download_data_files(file_name, download_url):
         raise FileNotFoundError(f"Expected data file not found: {file_path}")
 
 
-def process_town_data(country_code, region_code, subregion_code):
-    print(f"Processing {country_code} {region_code} {subregion_code}")
+def process_town_data(country_code, region_codes, subregion_code):
+    region_display = ", ".join(region_codes) if isinstance(region_codes, list) else region_codes
+    print(f"Processing {country_code} {region_display} {subregion_code}")
     try:
         input_data = determine_input_data(country_code)
         if VERBOSE_OUTPUT:
@@ -340,7 +367,7 @@ def process_town_data(country_code, region_code, subregion_code):
     except Exception as e:
         print(e)
         return  # or handle error appropriately
-    town_records = read_and_process_towns(input_data, country_code, region_code, subregion_code)
+    town_records = read_and_process_towns(input_data, country_code, region_codes, subregion_code)
     town_records = sort_town_records(town_records, SORT_BY_POPULATION)
     town_records = town_records[:MAX_TOWNS]
     min_weight, scale = calculate_town_weights(town_records)
@@ -416,23 +443,32 @@ def manage_id_assignments(output_nml):
     return grf_id, version
 
 
-def process_country_region(country_code, region_code, subregion_code):
+def process_country_region(country_code, region_codes, subregion_code):
     # Adjust file paths and names based on country and region
     country_file_code = country_code if country_code else "World"
-    location_dir = f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names"
+
+    # Generate location identifier
+    if isinstance(region_codes, list) and len(region_codes) > 1:
+        # Multiple regions - create a combined identifier
+        region_str = "_".join(sorted(region_codes))
+    else:
+        # Single region
+        region_str = region_codes if isinstance(region_codes, str) else (region_codes[0] if region_codes else "")
+
+    location_dir = f"Taby_{country_file_code}{'_' + region_str if region_str else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names"
     output_dir = os.path.join(BASE_PATH, "Source_Files", location_dir)
     output_nml = os.path.join(
         output_dir,
-        f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.nml",
+        f"Taby_{country_file_code}{'_' + region_str if region_str else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.nml",
     )
     output_grf = os.path.join(
         output_dir,
-        f"Taby_{country_file_code}{'_' + region_code if region_code else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.grf",
+        f"Taby_{country_file_code}{'_' + region_str if region_str else ''}{'_' + subregion_code if subregion_code else ''}_Town_Names.grf",
     )
     prepare_output_dir(output_dir)
 
-    town_records, min_weight, scale, num_towns, lowest_population = process_town_data(country_code, region_code,
-                                                                                      subregion_code)
+    town_records, min_weight, scale, num_towns, lowest_population = process_town_data(
+        country_code, region_codes, subregion_code)
 
     # Assuming ID and other operations are similar for each pair
     grf_id, version = manage_id_assignments(location_dir)
@@ -440,7 +476,7 @@ def process_country_region(country_code, region_code, subregion_code):
     update_language_file(
         output_dir,
         country_code,
-        region_code,
+        region_codes,
         subregion_code,
         version,
         num_towns,
@@ -454,8 +490,10 @@ def process_country_region(country_code, region_code, subregion_code):
         if not os.path.exists(BASE_PATH + "/Output"):
             os.makedirs(BASE_PATH + "/Output", exist_ok=True)
         compile_and_deploy_grf(output_nml, output_grf, BASE_PATH + "\\Output")
+
+    region_display = ", ".join(region_codes) if isinstance(region_codes, list) else region_codes
     print(
-        f"Processed {len(town_records)} towns names for {country_code} {region_code} {subregion_code}"
+        f"Processed {len(town_records)} towns names for {country_code} {region_display} {subregion_code}"
     )
 
 
@@ -478,6 +516,35 @@ def get_input(data_input):
 
 
 def split_input(code):
+    """
+    Parse input code which can be:
+    - Country only: "US"
+    - Country.Region: "US.VT"
+    - Country.Region.Subregion: "US.VT.001"
+    - Multiple regions (comma-separated): "US.MA, US.NH, US.VT"
+
+    Returns: (country_code, region_codes, subregion_code)
+    where region_codes can be a string or list
+    """
+    # Check if there are commas (multiple regions)
+    if "," in code:
+        # Split by comma first
+        parts_list = [part.strip() for part in code.split(",")]
+        # Parse the first one to get country and first region
+        first_parts = parts_list[0].split(".")
+        country_code = first_parts[0] if first_parts else ""
+
+        # Extract all region codes
+        region_codes = []
+        for part in parts_list:
+            sub_parts = part.split(".")
+            if len(sub_parts) >= 2:
+                region_codes.append(sub_parts[1])
+
+        # For multiple regions, no subregion support
+        return country_code, region_codes, ""
+
+    # Single location
     parts = code.split(".")
     if len(parts) == 3:
         country_code, region_code, subregion_code = parts
@@ -508,8 +575,8 @@ def main():
     print(f"Data input list:/n{data_input}")
     i = 0
     for code in data_input:
-        country_code, region_code, subregion_code = split_input(code)
-        process_country_region(country_code, region_code, subregion_code)
+        country_code, region_codes, subregion_code = split_input(code)
+        process_country_region(country_code, region_codes, subregion_code)
         i += 1
         print(f"Processed {i} of {len(data_input)}")
 
